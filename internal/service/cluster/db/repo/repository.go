@@ -181,6 +181,10 @@ func (r *ClusterRepository) DeleteAlarmDefinitionsNotIn(ctx context.Context, ids
 	tags := utils.GetDBTagsFromStructFields(commonmodels.AlarmDefinition{}, "AlarmDictionaryID")
 
 	expr := psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...)).And(psql.Quote(tags["AlarmDictionaryID"]).EQ(psql.Arg(alarmDictionaryID)))
+	if alarmDictionaryID == uuid.Nil {
+		expr = psql.Quote(commonmodels.AlarmDefinition{}.PrimaryKey()).NotIn(psql.Arg(ids...).And(psql.Quote(tags["AlarmDictionaryID"]).IsNull()))
+	}
+
 	count, err := utils.Delete[commonmodels.AlarmDefinition](ctx, r.Db, expr)
 	return count, err
 }

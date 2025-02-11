@@ -1330,7 +1330,7 @@ func (t *reconcilerTask) createAlertmanagerClusterRoleAndBinding(ctx context.Con
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      rbacv1.ServiceAccountKind,
-				Namespace: utils.AlertmanagerNamespace,
+				Namespace: utils.OpenClusterManagementObservabilityNamespace,
 				Name:      utils.AlertmanagerSA,
 			},
 		},
