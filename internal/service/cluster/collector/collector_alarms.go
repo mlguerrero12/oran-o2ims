@@ -9,6 +9,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"log/slog"
 	"sync"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -441,7 +441,7 @@ const (
 
 func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoringv1.Rule, error) {
 	slog.Info("Collecting Thanos rules")
-	rules := []monitoringv1.Rule{}
+	var rules []monitoringv1.Rule
 
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, clients.SingleRequestTimeout)
 	defer cancel()
@@ -453,7 +453,12 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 			Namespace: utils.OpenClusterManagementObservabilityNamespace,
 			Name:      configMapName,
 		}, configMap)
-		if err != nil && !errors.IsNotFound(err) {
+		if err != nil {
+			if errors.IsNotFound(err) {
+				slog.Warn("Config map not found", "configMap", configMapName)
+				continue
+			}
+
 			return nil, fmt.Errorf("failed to get %s thanos config map: %w", name, err)
 		}
 
@@ -464,24 +469,25 @@ func (d *AlarmsDataSource) collectThanosRules(ctx context.Context) ([]monitoring
 		}
 
 		// Extract rules from the config map
-		ruleGroups := configMap.Data[key]
-		if ruleGroups != "" {
-			var groups []monitoringv1.RuleGroup
-			err = yaml.Unmarshal([]byte(ruleGroups), &groups)
+		rulSpec := configMap.Data[key]
+		if rulSpec != "" {
+			var spec monitoringv1.PrometheusRuleSpec
+			err = yaml.Unmarshal([]byte(rulSpec), &spec)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal %s thanos rules: %w", name, err)
 			}
 
-			for _, group := range groups {
+			for _, group := range spec.Groups {
 				for _, rule := range group.Rules {
 					if rule.Alert != "" {
 						rules = append(rules, rule)
 					}
 				}
 			}
+
 			slog.Debug("fetched %s thanos rules", "rules count", name, len(rules))
 		} else {
-			slog.Warn("No %s thanos rules found", name)
+			slog.Warn("No data found in config map", "configMap", configMapName)
 		}
 	}
 

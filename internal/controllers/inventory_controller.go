@@ -1079,6 +1079,7 @@ func (t *reconcilerTask) createClusterServerClusterRole(ctx context.Context) err
 				},
 				Resources: []string{
 					"secrets",
+					"configmaps",
 				},
 				Verbs: []string{
 					"get",

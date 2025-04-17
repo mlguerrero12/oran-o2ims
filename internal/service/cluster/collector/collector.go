@@ -196,6 +196,9 @@ func (c *Collector) executeOneDataSource(ctx context.Context, dataSource DataSou
 
 	// Sync thanos alarm definitions
 	err := c.syncThanosAlarmDefinitions(ctx, ds)
+	if err != nil {
+		return fmt.Errorf("failed to sync Thanos alarm definitions: %w", err)
+	}
 
 	nodeClusterTypes, err := c.repository.GetNodeClusterTypes(ctx)
 	if err != nil {
@@ -580,7 +583,17 @@ func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDa
 	}
 
 	if len(rules) == 0 {
-		slog.Info("No Thanos rules found")
+		slog.Info("No Thanos rules found in config maps")
+
+		count, err := c.repository.DeleteThanosAlarmDefinitions(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to delete Thanos alarm definitions: %w", err)
+		}
+
+		if count != 0 {
+			slog.Info("Deleted Thanos alarm definitions", "count", count)
+		}
+
 		return nil
 	}
 
@@ -602,9 +615,9 @@ func (c *Collector) syncThanosAlarmDefinitions(ctx context.Context, ds *AlarmsDa
 		alarmDefinitionIDs = append(alarmDefinitionIDs, record.AlarmDefinitionID)
 	}
 
-	count, err := c.repository.DeleteAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs, uuid.Nil)
+	count, err := c.repository.DeleteThanosAlarmDefinitionsNotIn(ctx, alarmDefinitionIDs)
 	if err != nil {
-		slog.Error("failed to delete non-valid thanos alarm definitions", "error", err)
+		slog.Error("failed to delete outdated thanos alarm definitions", "error", err)
 		return nil
 	}
 
